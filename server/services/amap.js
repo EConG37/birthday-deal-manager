@@ -186,10 +186,14 @@ async function regeocode(location) {
       if (typeof v === 'object') return v.name || v.name_join || JSON.stringify(v);
       return String(v);
     };
-    const shortName = toString(addr.neighborhood) || toString(addr.building) || toString(addr.street) || toString(addr.township) || '';
+    // 优先用 district + township + 街道 组合，比 formatted 更简洁
+    const district = toString(addr.district);
+    const township = toString(addr.township);
+    // streetNumber 是对象，street 字段在里边
+    const streetName = addr.streetNumber ? toString(addr.streetNumber.street) : '';
+    const shortName = (district + township + streetName) || toString(addr.neighborhood) || toString(addr.building) || '';
     const province = toString(addr.province);
     const city = toString(addr.city) || province;  // 直辖市 city 可能为空，用 province 兜底
-    const district = toString(addr.district);
     return {
       address: shortName || formatted,
       formatted: formatted,
