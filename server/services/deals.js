@@ -9,7 +9,7 @@ let dealsCache = null;
 function loadDeals() {
   if (dealsCache) return dealsCache;
 
-  const jsonlPath = path.join(__dirname, '..', '..', '..', '03_优惠种子数据.jsonl');
+  const jsonlPath = path.join(__dirname, '..', 'data', 'deals.jsonl');
   const content = fs.readFileSync(jsonlPath, 'utf-8');
   dealsCache = content
     .split('\n')
