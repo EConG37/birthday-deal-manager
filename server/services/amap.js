@@ -206,8 +206,28 @@ async function regeocode(location) {
     if (!shortName) {
       shortName = (district + township + streetName + streetNum) || toString(addr.neighborhood) || toString(addr.building) || '';
     }
+
+    // 搜索附近 POI，找到最近的小区/地标/建筑名（比逆地理编码更精确）
+    let poiName = '';
+    try {
+      const poiUrl = `${BASE_V5}/place/around?key=${AMAP_KEY}&location=${location}&radius=200&sortrule=distance&types=120000|130000|140000|150000&size=3`;
+      const poiRes = await fetch(poiUrl);
+      const poiData = await poiRes.json();
+      if (poiData.status === '1' && poiData.pois && poiData.pois.length > 0) {
+        // 优先找小区/住宅类，其次地标/建筑
+        const residential = poiData.pois.find(p => p.typecode && p.typecode.startsWith('120'));
+        const landmark = poiData.pois.find(p => p.typecode && p.typecode.startsWith('14'));
+        const nearest = residential || landmark || poiData.pois[0];
+        if (nearest && nearest.name) {
+          poiName = nearest.name;
+        }
+      }
+    } catch (e) {
+      // POI 搜索失败不影响主流程
+    }
+
     return {
-      address: shortName || formatted,
+      address: poiName || shortName || formatted,
       formatted: formatted,
       province: province,
       city: city,

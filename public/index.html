@@ -640,33 +640,37 @@ function getMyLocation() {
       });
 
       geolocation.getCurrentPosition(function(status, result) {
-        btn.disabled = false;
-        btn.innerHTML = '📡 定位';
-
         if (status === 'complete') {
           const lon = result.position.getLng();
           const lat = result.position.getLat();
           userCoords = lon + ',' + lat;
+          const accuracy = result.accuracy ? Math.round(result.accuracy) : 0;
 
-          const addr = result.addressComponent || {};
-          const formatted = result.formattedAddress || '';
+          // 高德 JS API 定位在浏览器端不返回地址，需调后端逆地理编码
+          fetch('/api/regeocode?location=' + userCoords)
+            .then(res => res.json())
+            .then(data => {
+              btn.disabled = false;
+              btn.innerHTML = '📡 定位';
 
-          // 从 formatted 中截取区名之后的部分（含具体地点/小区名）
-          const district = addr.district || '';
-          let shortName = '';
-          if (formatted && district) {
-            const idx = formatted.indexOf(district);
-            shortName = idx >= 0 ? formatted.substring(idx) : formatted;
-          }
-          if (!shortName) shortName = formatted;
-
-          originInput.value = shortName;
-          const city = addr.city || addr.province || '';
-          if (city) cityInput.value = city.replace(/市$/, '');
-
-          const statusEl = document.getElementById('locationStatus');
-          statusEl.innerHTML = '✅ 定位成功：' + shortName + (city ? '（' + city + '）' : '') + '<br>精度: ±' + (result.accuracy ? Math.round(result.accuracy) + 'm' : '未知');
-          statusEl.style.color = 'var(--matcha-deep)';
+              if (data.address) {
+                originInput.value = data.address;
+                const city = data.city || data.province || '';
+                if (city) cityInput.value = city.replace(/市$/, '');
+                status.innerHTML = '✅ 定位成功：' + data.address + (city ? '（' + city + '）' : '') + '<br>精度: ±' + accuracy + 'm';
+              } else {
+                originInput.value = '我的位置(' + lat.toFixed(4) + ',' + lon.toFixed(4) + ')';
+                status.innerHTML = '✅ 定位成功（坐标: ' + userCoords + '）<br>精度: ±' + accuracy + 'm';
+              }
+              status.style.color = 'var(--matcha-deep)';
+            })
+            .catch(() => {
+              btn.disabled = false;
+              btn.innerHTML = '📡 定位';
+              originInput.value = '我的位置(' + lat.toFixed(4) + ',' + lon.toFixed(4) + ')';
+              status.innerHTML = '✅ 定位成功（坐标: ' + userCoords + '）<br>精度: ±' + accuracy + 'm';
+              status.style.color = 'var(--matcha-deep)';
+            });
         } else {
           browserLocateFallback(btn, status, originInput, cityInput);
         }
