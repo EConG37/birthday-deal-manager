@@ -646,10 +646,14 @@ function getMyLocation() {
           userCoords = lon + ',' + lat;
           const accuracy = result.accuracy ? Math.round(result.accuracy) : 0;
 
-          // 高德 JS API 定位在浏览器端不返回地址，需调后端逆地理编码
-          fetch('/api/regeocode?location=' + userCoords)
+          // 先尝试后端逆地理编码（含POI搜索），失败则用前端高德Geocoder
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+          fetch('/api/regeocode?location=' + userCoords, { signal: controller.signal })
             .then(res => res.json())
             .then(data => {
+              clearTimeout(timeoutId);
               btn.disabled = false;
               btn.innerHTML = '📡 定位';
 
@@ -659,17 +663,15 @@ function getMyLocation() {
                 if (city) cityInput.value = city.replace(/市$/, '');
                 status.innerHTML = '✅ 定位成功：' + data.address + (city ? '（' + city + '）' : '') + '<br>精度: ±' + accuracy + 'm';
               } else {
-                originInput.value = '我的位置(' + lat.toFixed(4) + ',' + lon.toFixed(4) + ')';
-                status.innerHTML = '✅ 定位成功（坐标: ' + userCoords + '）<br>精度: ±' + accuracy + 'm';
+                // 后端没返回地址，用前端高德Geocoder
+                reverseGeocodeFrontend([lon, lat], accuracy, btn, originInput, cityInput, status);
               }
               status.style.color = 'var(--matcha-deep)';
             })
             .catch(() => {
-              btn.disabled = false;
-              btn.innerHTML = '📡 定位';
-              originInput.value = '我的位置(' + lat.toFixed(4) + ',' + lon.toFixed(4) + ')';
-              status.innerHTML = '✅ 定位成功（坐标: ' + userCoords + '）<br>精度: ±' + accuracy + 'm';
-              status.style.color = 'var(--matcha-deep)';
+              clearTimeout(timeoutId);
+              // 后端超时或失败，用前端高德Geocoder
+              reverseGeocodeFrontend([lon, lat], accuracy, btn, originInput, cityInput, status);
             });
         } else {
           browserLocateFallback(btn, status, originInput, cityInput);
@@ -679,6 +681,52 @@ function getMyLocation() {
   } else {
     browserLocateFallback(btn, status, originInput, cityInput);
   }
+}
+
+/**
+ * 用前端高德 Geocoder 插件做逆地理编码（后端不可用时的备选方案）
+ */
+function reverseGeocodeFrontend(lnglat, accuracy, btn, originInput, cityInput, status) {
+  if (typeof AMap === 'undefined') {
+    btn.disabled = false;
+    btn.innerHTML = '📡 定位';
+    originInput.value = '我的位置(' + lnglat[1].toFixed(4) + ',' + lnglat[0].toFixed(4) + ')';
+    status.innerHTML = '✅ 定位成功（坐标: ' + lnglat[0] + ',' + lnglat[1] + '）<br>精度: ±' + accuracy + 'm';
+    status.style.color = 'var(--matcha-deep)';
+    return;
+  }
+
+  AMap.plugin('AMap.Geocoder', function() {
+    const geocoder = new AMap.Geocoder({ extensions: 'all' });
+    geocoder.getAddress(lnglat, function(gcStatus, result) {
+      btn.disabled = false;
+      btn.innerHTML = '📡 定位';
+
+      if (gcStatus === 'complete' && result.info === 'OK') {
+        const formatted = result.regeocode.formattedAddress || '';
+        const addr = result.regeocode.addressComponent || {};
+        const district = addr.district || '';
+        const city = addr.city || addr.province || '';
+
+        // 从 formatted 中截取区名之后的部分
+        let shortName = '';
+        if (formatted && district) {
+          const idx = formatted.indexOf(district);
+          shortName = idx >= 0 ? formatted.substring(idx) : formatted;
+        }
+        if (!shortName) shortName = formatted;
+
+        originInput.value = shortName;
+        if (city) cityInput.value = city.replace(/市$/, '');
+        status.innerHTML = '✅ 定位成功：' + shortName + (city ? '（' + city + '）' : '') + '<br>精度: ±' + accuracy + 'm';
+        status.style.color = 'var(--matcha-deep)';
+      } else {
+        originInput.value = '我的位置(' + lnglat[1].toFixed(4) + ',' + lnglat[0].toFixed(4) + ')';
+        status.innerHTML = '✅ 定位成功（坐标: ' + lnglat[0] + ',' + lnglat[1] + '）<br>精度: ±' + accuracy + 'm';
+        status.style.color = 'var(--matcha-deep)';
+      }
+    });
+  });
 }
 
 function browserLocateFallback(btn, status, originInput, cityInput) {
