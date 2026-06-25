@@ -628,161 +628,81 @@ function getMyLocation() {
   status.textContent = '正在获取定位，请允许位置权限...';
   status.style.color = 'var(--orange-deep)';
 
-  // 优先使用高德 JS API 定位（中国地区更准，支持北斗+WiFi+基站）
-  if (typeof AMap !== 'undefined') {
-    AMap.plugin('AMap.Geolocation', function() {
-      const geolocation = new AMap.Geolocation({
-        enableHighAccuracy: true,
-        timeout: 12000,
-        GeoLocationFirst: true,
-        needAddress: true,
-        extensions: 'all'
-      });
-
-      geolocation.getCurrentPosition(function(status, result) {
-        if (status === 'complete') {
-          const lon = result.position.getLng();
-          const lat = result.position.getLat();
-          userCoords = lon + ',' + lat;
-          const accuracy = result.accuracy ? Math.round(result.accuracy) : 0;
-
-          // 先尝试后端逆地理编码（含POI搜索），失败则用前端高德Geocoder
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-          fetch('/api/regeocode?location=' + userCoords, { signal: controller.signal })
-            .then(res => res.json())
-            .then(data => {
-              clearTimeout(timeoutId);
-              btn.disabled = false;
-              btn.innerHTML = '📡 定位';
-
-              if (data.address) {
-                originInput.value = data.address;
-                const city = data.city || data.province || '';
-                if (city) cityInput.value = city.replace(/市$/, '');
-                status.innerHTML = '✅ 定位成功：' + data.address + (city ? '（' + city + '）' : '') + '<br>精度: ±' + accuracy + 'm';
-              } else {
-                // 后端没返回地址，用前端高德Geocoder
-                reverseGeocodeFrontend([lon, lat], accuracy, btn, originInput, cityInput, status);
-              }
-              status.style.color = 'var(--matcha-deep)';
-            })
-            .catch(() => {
-              clearTimeout(timeoutId);
-              // 后端超时或失败，用前端高德Geocoder
-              reverseGeocodeFrontend([lon, lat], accuracy, btn, originInput, cityInput, status);
-            });
-        } else {
-          browserLocateFallback(btn, status, originInput, cityInput);
-        }
-      });
-    });
-  } else {
-    browserLocateFallback(btn, status, originInput, cityInput);
-  }
-}
-
-/**
- * 用前端高德 Geocoder 插件做逆地理编码（后端不可用时的备选方案）
- */
-function reverseGeocodeFrontend(lnglat, accuracy, btn, originInput, cityInput, status) {
   if (typeof AMap === 'undefined') {
-    btn.disabled = false;
-    btn.innerHTML = '📡 定位';
-    originInput.value = '我的位置(' + lnglat[1].toFixed(4) + ',' + lnglat[0].toFixed(4) + ')';
-    status.innerHTML = '✅ 定位成功（坐标: ' + lnglat[0] + ',' + lnglat[1] + '）<br>精度: ±' + accuracy + 'm';
-    status.style.color = 'var(--matcha-deep)';
-    return;
-  }
-
-  AMap.plugin('AMap.Geocoder', function() {
-    const geocoder = new AMap.Geocoder({ extensions: 'all' });
-    geocoder.getAddress(lnglat, function(gcStatus, result) {
-      btn.disabled = false;
-      btn.innerHTML = '📡 定位';
-
-      if (gcStatus === 'complete' && result.info === 'OK') {
-        const formatted = result.regeocode.formattedAddress || '';
-        const addr = result.regeocode.addressComponent || {};
-        const district = addr.district || '';
-        const city = addr.city || addr.province || '';
-
-        // 从 formatted 中截取区名之后的部分
-        let shortName = '';
-        if (formatted && district) {
-          const idx = formatted.indexOf(district);
-          shortName = idx >= 0 ? formatted.substring(idx) : formatted;
-        }
-        if (!shortName) shortName = formatted;
-
-        originInput.value = shortName;
-        if (city) cityInput.value = city.replace(/市$/, '');
-        status.innerHTML = '✅ 定位成功：' + shortName + (city ? '（' + city + '）' : '') + '<br>精度: ±' + accuracy + 'm';
-        status.style.color = 'var(--matcha-deep)';
-      } else {
-        originInput.value = '我的位置(' + lnglat[1].toFixed(4) + ',' + lnglat[0].toFixed(4) + ')';
-        status.innerHTML = '✅ 定位成功（坐标: ' + lnglat[0] + ',' + lnglat[1] + '）<br>精度: ±' + accuracy + 'm';
-        status.style.color = 'var(--matcha-deep)';
-      }
-    });
-  });
-}
-
-function browserLocateFallback(btn, status, originInput, cityInput) {
-  if (!navigator.geolocation) {
-    status.textContent = '❌ 您的浏览器不支持定位功能';
+    status.textContent = '❌ 地图组件未加载，请刷新页面重试';
     status.style.color = 'var(--stamp)';
     btn.disabled = false;
     btn.innerHTML = '📡 定位';
     return;
   }
 
-  status.textContent = '正在通过 GPS 定位（高精度模式，可能需要数秒）...';
+  // 加载定位+逆地理编码两个插件，全部在前端完成，不依赖后端
+  AMap.plugin(['AMap.Geolocation', 'AMap.Geocoder'], function() {
+    const geolocation = new AMap.Geolocation({
+      enableHighAccuracy: true,
+      timeout: 15000,
+      GeoLocationFirst: true
+    });
 
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      const lat = position.coords.latitude;
-      const lon = position.coords.longitude;
+    geolocation.getCurrentPosition(function(status, result) {
+      if (status !== 'complete') {
+        btn.disabled = false;
+        btn.innerHTML = '📡 定位';
+        document.getElementById('locationStatus').textContent = '❌ 定位失败，请检查是否允许位置权限';
+        document.getElementById('locationStatus').style.color = 'var(--stamp)';
+        return;
+      }
+
+      const lon = result.position.getLng();
+      const lat = result.position.getLat();
       userCoords = lon + ',' + lat;
+      const accuracy = result.accuracy ? Math.round(result.accuracy) : 0;
 
-      fetch('/api/regeocode?location=' + userCoords)
-        .then(res => res.json())
-        .then(data => {
-          if (data.address) {
-            originInput.value = data.address;
-            const city = data.city || data.province || '';
-            if (city) cityInput.value = city.replace(/市$/, '');
-            status.innerHTML = '✅ 定位成功：' + data.address + (city ? '（' + city + '）' : '') + '<br>精度: ±' + (position.coords.accuracy ? Math.round(position.coords.accuracy) + 'm' : '未知');
-          } else {
-            originInput.value = '我的位置(' + lat.toFixed(4) + ',' + lon.toFixed(4) + ')';
-            status.innerHTML = '✅ 定位成功（坐标: ' + userCoords + '）';
+      // 直接在前端用高德 Geocoder 逆地理编码，不走后端
+      const geocoder = new AMap.Geocoder({ extensions: 'all' });
+      geocoder.getAddress([lon, lat], function(gcStatus, gcResult) {
+        btn.disabled = false;
+        btn.innerHTML = '📡 定位';
+        const statusEl = document.getElementById('locationStatus');
+
+        if (gcStatus === 'complete' && gcResult.info === 'OK') {
+          const regeo = gcResult.regeocode;
+          const formatted = regeo.formattedAddress || '';
+          const addr = regeo.addressComponent || {};
+          const pois = regeo.pois || [];
+
+          // 优先用最近的 POI 名称（小区/地标/建筑）
+          let poiName = '';
+          if (pois.length > 0) {
+            // 找最近的小区/住宅类 POI
+            const residential = pois.find(p => p.typecode && p.typecode.startsWith('120'));
+            poiName = (residential || pois[0]).name || '';
           }
-          status.style.color = 'var(--matcha-deep)';
-          btn.disabled = false;
-          btn.innerHTML = '📡 定位';
-        })
-        .catch(() => {
-          originInput.value = '我的位置(' + lat.toFixed(4) + ',' + lon.toFixed(4) + ')';
-          status.innerHTML = '✅ 定位成功（坐标: ' + userCoords + '）';
-          status.style.color = 'var(--matcha-deep)';
-          btn.disabled = false;
-          btn.innerHTML = '📡 定位';
-        });
-    },
-    (error) => {
-      let msg = '定位失败';
-      if (error.code === 1) msg = '❌ 定位被拒绝，请在浏览器设置中允许位置权限';
-      else if (error.code === 2) msg = '❌ 定位不可用，请检查 GPS 或网络';
-      else if (error.code === 3) msg = '❌ 定位超时，请重试';
 
-      status.textContent = msg;
-      status.style.color = 'var(--stamp)';
-      btn.disabled = false;
-      btn.innerHTML = '📡 定位';
-    },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-  );
+          // 截取区名之后的部分
+          const district = addr.district || '';
+          let shortName = '';
+          if (formatted && district) {
+            const idx = formatted.indexOf(district);
+            shortName = idx >= 0 ? formatted.substring(idx) : formatted;
+          }
+
+          const finalAddress = poiName || shortName || formatted;
+          const city = addr.city || addr.province || '';
+
+          originInput.value = finalAddress;
+          if (city) cityInput.value = city.replace(/市$/, '');
+          statusEl.innerHTML = '✅ 定位成功：' + finalAddress + (city ? '（' + city + '）' : '') + '<br>精度: ±' + accuracy + 'm';
+          statusEl.style.color = 'var(--matcha-deep)';
+        } else {
+          // Geocoder 也失败，用坐标兜底
+          originInput.value = lon.toFixed(6) + ',' + lat.toFixed(6);
+          statusEl.innerHTML = '✅ 定位成功（精度: ±' + accuracy + 'm）<br>未能解析地址，请手动输入出发地';
+          statusEl.style.color = 'var(--matcha-deep)';
+        }
+      });
+    });
+  });
 }
 
 /**
