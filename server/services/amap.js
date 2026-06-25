@@ -186,14 +186,26 @@ async function regeocode(location) {
       if (typeof v === 'object') return v.name || v.name_join || JSON.stringify(v);
       return String(v);
     };
-    // 优先用 district + township + 街道 组合，比 formatted 更简洁
+    // 优先用 formatted_address 去掉省市前缀，保留街道+具体地点
     const district = toString(addr.district);
     const township = toString(addr.township);
-    // streetNumber 是对象，street 字段在里边
     const streetName = addr.streetNumber ? toString(addr.streetNumber.street) : '';
-    const shortName = (district + township + streetName) || toString(addr.neighborhood) || toString(addr.building) || '';
+    const streetNum = addr.streetNumber ? toString(addr.streetNumber.number) : '';
     const province = toString(addr.province);
-    const city = toString(addr.city) || province;  // 直辖市 city 可能为空，用 province 兜底
+    const city = toString(addr.city) || province;
+
+    // 从 formatted 中截取区名之后的部分，包含具体地点/建筑名
+    let shortName = '';
+    if (formatted && district) {
+      const idx = formatted.indexOf(district);
+      if (idx >= 0) {
+        shortName = formatted.substring(idx); // "平城区新旺街道源兴街华宇百花谷"
+      }
+    }
+    // 兜底：district + township + street + number
+    if (!shortName) {
+      shortName = (district + township + streetName + streetNum) || toString(addr.neighborhood) || toString(addr.building) || '';
+    }
     return {
       address: shortName || formatted,
       formatted: formatted,
