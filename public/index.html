@@ -1051,11 +1051,12 @@ function initAMap(data) {
 
     // 信息窗体
     const infoWindow = new AMap.InfoWindow({
-      content: `<div style="padding:10px 14px;min-width:180px">
+      content: `<div style="padding:10px 14px;min-width:200px">
         <div style="font-family:'ZCOOL KuaiLe',cursive;font-size:18px;color:#3A2618;margin-bottom:4px">${stop.brand}</div>
         <div style="font-size:12px;color:#6B4A35;margin-bottom:6px">🎂 ${stop.perk_title}</div>
         <div style="font-size:11px;color:#9C7B62">📍 ${stop.store_name}</div>
         <div style="font-size:11px;color:#9C7B62;margin-top:2px">⏰ ${stop.suggested_time} · 📏 ${stop.distance}m · 💰 ¥${stop.estimated_value}</div>
+        <a href="https://uri.amap.com/navigation?to=${lon},${lat},${encodeURIComponent(stop.store_name)}&mode=walk" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;padding:4px 12px;background:#FF6B35;color:#fff;border-radius:12px;font-size:11px;text-decoration:none;font-weight:600">🧭 高德导航</a>
       </div>`,
       offset: new AMap.Pixel(0, -20)
     });

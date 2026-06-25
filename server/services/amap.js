@@ -210,7 +210,7 @@ async function regeocode(location) {
     // 搜索附近 POI，找到最近的小区/地标/建筑名（比逆地理编码更精确）
     let poiName = '';
     try {
-      const poiUrl = `${BASE_V5}/place/around?key=${AMAP_KEY}&location=${location}&radius=200&sortrule=distance&types=120000|130000|140000|150000&size=3`;
+      const poiUrl = `${BASE_V5}/place/around?key=${AMAP_KEY}&location=${location}&radius=500&sortrule=distance&types=120000|130000|140000|150000&size=5`;
       const poiRes = await fetch(poiUrl);
       const poiData = await poiRes.json();
       if (poiData.status === '1' && poiData.pois && poiData.pois.length > 0) {
