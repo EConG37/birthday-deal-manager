@@ -511,6 +511,7 @@ footer .tech{font-family:'Fraunces',serif;font-style:italic;font-size:12px;margi
           </div>
         </div>
         <button class="go-btn" id="btnPlan" onclick="planRoute()">生成我的薅羊毛地图 →</button>
+        <div class="error-box" id="errorBox"></div>
       </div>
     </div>
 
@@ -593,9 +594,6 @@ footer .tech{font-family:'Fraunces',serif;font-style:italic;font-size:12px;margi
   </div>
 </div>
 
-<!-- ===== 错误提示 ===== -->
-<div class="wrap"><div class="error-box" id="errorBox"></div></div>
-
 <!-- ===== 结果区域 ===== -->
 <div class="result" id="result">
   <!-- 动态渲染 -->
@@ -622,6 +620,7 @@ function getMyLocation() {
   const btn = document.getElementById('btnLocate');
   const status = document.getElementById('locationStatus');
   const originInput = document.getElementById('origin');
+  const cityInput = document.getElementById('city');
 
   if (!navigator.geolocation) {
     status.textContent = '❌ 您的浏览器不支持定位功能';
@@ -647,7 +646,10 @@ function getMyLocation() {
         .then(data => {
           if (data.address) {
             originInput.value = data.address;
-            status.innerHTML = '✅ 定位成功：' + data.address + '<br>坐标: ' + userCoords;
+            // 自动填充城市
+            const city = data.city || data.province || '';
+            if (city) cityInput.value = city.replace(/市$/, '');
+            status.innerHTML = '✅ 定位成功：' + data.address + (city ? '（' + city + '）' : '') + '<br>坐标: ' + userCoords;
           } else {
             originInput.value = '我的位置(' + lat.toFixed(4) + ',' + lon.toFixed(4) + ')';
             status.innerHTML = '✅ 定位成功（坐标: ' + userCoords + '）';
