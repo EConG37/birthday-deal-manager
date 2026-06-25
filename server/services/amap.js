@@ -178,14 +178,24 @@ async function regeocode(location) {
   if (data.status === '1' && data.regeocode) {
     const addr = data.regeocode.addressComponent;
     const formatted = data.regeocode.formatted_address || '';
-    // 返回简洁的地名：区+道路 或 格式化地址
-    const shortName = addr.neighborhood || addr.building || addr.street || '';
+    // 高德 API 的 addressComponent 部分字段可能返回数组或对象，需统一转为字符串
+    const toString = (v) => {
+      if (!v) return '';
+      if (typeof v === 'string') return v;
+      if (Array.isArray(v)) return v.join('');
+      if (typeof v === 'object') return v.name || v.name_join || JSON.stringify(v);
+      return String(v);
+    };
+    const shortName = toString(addr.neighborhood) || toString(addr.building) || toString(addr.street) || toString(addr.township) || '';
+    const province = toString(addr.province);
+    const city = toString(addr.city) || province;  // 直辖市 city 可能为空，用 province 兜底
+    const district = toString(addr.district);
     return {
       address: shortName || formatted,
       formatted: formatted,
-      province: addr.province || '',
-      city: addr.city || '',
-      district: addr.district || ''
+      province: province,
+      city: city,
+      district: district
     };
   }
   return { address: '', formatted: '', province: '', city: '', district: '' };
