@@ -23,6 +23,7 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
 
 // API路由
 app.use('/api/plan', require('./routes/plan'));
+app.use('/api/squad', require('./routes/squad'));
 
 // 逆地理编码（前端GPS定位后调用）
 app.get('/api/regeocode', async (req, res) => {

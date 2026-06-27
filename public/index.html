@@ -453,6 +453,8 @@ footer .tech{font-family:'Fraunces',serif;font-style:italic;font-size:12px;margi
   #amapContainer{height:400px}
   .timeline{height:420px}
   .nav-pills{display:none}
+  .field-row{gap:10px}
+  .field{min-width:0;flex:1}
   section.block{padding:44px 0}
   #routeBlock{padding:32px 18px}
   .topbar-in{height:54px}
@@ -489,6 +491,10 @@ footer .tech{font-family:'Fraunces',serif;font-style:italic;font-size:12px;margi
 
       <div class="input-card">
         <div class="field-row">
+          <div class="field">
+            <label>你的昵称</label>
+            <input type="text" id="nickname" placeholder="如：薅羊毛小能手" maxlength="20">
+          </div>
           <div class="field">
             <label>生日日期</label>
             <input type="date" id="birthday" value="2026-12-15">
@@ -770,7 +776,11 @@ async function planRoute() {
     clearInterval(stepTimer);
     document.getElementById('loading').classList.remove('show');
     data._birthday = birthday;
+    data._city = city;
     renderResult(data);
+
+    // 生成路线后自动加入生辰局，匹配同城同日队友
+    joinSquad(data, birthday, city);
 
   } catch (err) {
     clearInterval(stepTimer);
@@ -787,6 +797,94 @@ function showError(msg) {
   box.textContent = '❌ ' + msg;
   box.classList.add('show');
   box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+/**
+ * 生辰局：自动加入并匹配同城同日队友
+ */
+async function joinSquad(data, birthday, city) {
+  const nicknameInput = document.getElementById('nickname');
+  let nickname = nicknameInput.value.trim();
+  if (!nickname) nickname = '匿名寿星';
+
+  // 从 localStorage 获取 userId（无需登录）
+  let userId = localStorage.getItem('bdm_userId');
+  if (!userId) {
+    userId = 'u_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    localStorage.setItem('bdm_userId', userId);
+  }
+
+  try {
+    const resp = await fetch('/api/squad/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        nickname,
+        birthday,
+        city,
+        routeCount: data.route ? data.route.length : 0
+      })
+    });
+    const result = await resp.json();
+    if (result.teammates) {
+      renderSquad(result, birthday, city, data);
+    }
+  } catch (e) {
+    console.log('生辰局匹配失败（不影响主功能）:', e.message);
+  }
+}
+
+/**
+ * 渲染生辰局队友列表
+ */
+function renderSquad(squadData, birthday, city, routeData) {
+  const section = document.getElementById('squadSection');
+  const membersEl = document.getElementById('squadMembers');
+  const badgeEl = document.getElementById('squadBadge');
+  const subEl = document.getElementById('squadSub');
+
+  const teammates = squadData.teammates || [];
+  const totalCount = teammates.length + 1; // 包括自己
+
+  // 更新文案
+  badgeEl.textContent = city + ' · ' + birthday + ' · ' + totalCount + '人在线';
+  subEl.innerHTML = totalCount > 1
+    ? '找到 <strong>' + (totalCount - 1) + '</strong> 位和你同城同日生日的小伙伴，组队打卡效率更高！'
+    : '你已加入生辰局！目前还没有同城同日生日的队友，分享给朋友来组队吧 →';
+
+  // 渲染成员卡片
+  let html = '';
+
+  // 自己（队长）
+  const myColor = squadData.avatarColor || '#FF6B35';
+  const myName = squadData.nickname || '我';
+  const myInitial = myName.charAt(0);
+  html += '<div class="member-card is-leader">';
+  html += '<div class="member-avatar" style="background:' + myColor + '">' + myInitial + '</div>';
+  html += '<div class="member-name">' + myName + '（队长）</div>';
+  html += '<div class="member-bio">' + city + ' · ' + birthday + '</div>';
+  html += '<div class="member-route">' + (routeData.route ? routeData.route.length : 0) + '站路线已规划</div>';
+  html += '</div>';
+
+  // 队友
+  teammates.forEach(function(t) {
+    const initial = t.nickname.charAt(0);
+    const onlineDot = t.isOnline ? '<span style="color:#2A9D8F">●</span> ' : '<span style="color:#ccc">○</span> ';
+    const routeInfo = t.routeCount > 0
+      ? '已规划' + t.routeCount + '站路线' + (t.currentStop ? ' · 在' + t.currentStop : '')
+      : '刚加入 · 规划中';
+
+    html += '<div class="member-card">';
+    html += '<div class="member-avatar" style="background:' + t.avatarColor + '">' + initial + '</div>';
+    html += '<div class="member-name">' + onlineDot + t.nickname + '</div>';
+    html += '<div class="member-bio">' + t.city + ' · ' + t.birthday + '</div>';
+    html += '<div class="member-route">' + routeInfo + '</div>';
+    html += '</div>';
+  });
+
+  membersEl.innerHTML = html;
+  section.style.display = 'block';
 }
 
 /**
@@ -884,45 +982,20 @@ function renderResult(data) {
       </div>
 
       <!-- 生辰局：同城同日生日小分队 -->
-      <div class="squad-section fade-in">
+      <div class="squad-section fade-in" id="squadSection" style="display:none">
         <div class="squad-card">
           <div class="squad-head">
             <div>
               <h3>🎉 生辰局 · 同城同日薅羊毛小分队</h3>
-              <div class="squad-sub">和你同一天生日、在同一座城市的小伙伴们，组队打卡效率更高！<br>已有 ${3 + Math.floor(Math.random()*3)} 位寿星在线，快来组建你的薅羊毛小分队 →</div>
+              <div class="squad-sub" id="squadSub">和你同一天生日、在同一座城市的小伙伴们，组队打卡效率更高！</div>
             </div>
-            <div class="squad-badge"><span class="squad-pulse"></span>${data.city} · ${data._birthday} 在线</div>
+            <div class="squad-badge"><span class="squad-pulse"></span><span id="squadBadge">匹配中...</span></div>
           </div>
-          <div class="squad-members">
-            <div class="member-card is-leader">
-              <div class="member-avatar" style="background:var(--orange)">我</div>
-              <div class="member-name">我（队长）</div>
-              <div class="member-bio">${data.city} · ${data._birthday}</div>
-              <div class="member-route">${data.route.length}站路线已规划</div>
-            </div>
-            <div class="member-card">
-              <div class="member-avatar" style="background:var(--rose)">小</div>
-              <div class="member-name">小薅</div>
-              <div class="member-bio">${data.city} · ${data._birthday}</div>
-              <div class="member-route">已领3站 · 正在海底捞</div>
-            </div>
-            <div class="member-card">
-              <div class="member-avatar" style="background:var(--matcha)">羊</div>
-              <div class="member-name">羊毛君</div>
-              <div class="member-bio">${data.city} · ${data._birthday}</div>
-              <div class="member-route">已领5站 · 前往喜茶中</div>
-            </div>
-            <div class="member-card">
-              <div class="member-avatar" style="background:var(--gold)">达</div>
-              <div class="member-name">达达同学</div>
-              <div class="member-bio">${data.city} · ${data._birthday}</div>
-              <div class="member-route">刚出发 · 第1站星巴克</div>
-            </div>
+          <div class="squad-members" id="squadMembers">
+            <!-- 动态填充 -->
           </div>
           <div class="squad-actions">
-            <button class="btn-squad" onclick="alert('功能开发中，敬请期待')">🤝 加入小分队</button>
-            <button class="btn-squad secondary" onclick="alert('功能开发中，敬请期待')">📢 发起组局</button>
-            <span class="squad-tip">💡 组队打卡可拼单满减、共享路线、互拍打卡照<br>当前为展示效果，功能将在复赛上线</span>
+            <span class="squad-tip">💡 组队打卡可拼单满减、共享路线、互拍打卡照<br>队友数据基于同城同日生日自动匹配，无需登录</span>
           </div>
         </div>
       </div>
