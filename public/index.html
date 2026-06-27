@@ -492,7 +492,7 @@ footer .tech{font-family:'Fraunces',serif;font-style:italic;font-size:12px;margi
       <div class="input-card">
         <div class="field-row">
           <div class="field">
-            <label>你的昵称</label>
+            <label>微信号（用于队友联系）</label>
             <input type="text" id="nickname" placeholder="如：薅羊毛小能手" maxlength="20">
           </div>
           <div class="field">
@@ -878,7 +878,7 @@ function renderSquad(squadData, birthday, city, routeData) {
     html += '<div class="member-card">';
     html += '<div class="member-avatar" style="background:' + t.avatarColor + '">' + initial + '</div>';
     html += '<div class="member-name">' + onlineDot + t.nickname + '</div>';
-    html += '<div class="member-bio">' + t.city + ' · ' + t.birthday + '</div>';
+    html += '<div class="member-bio">' + t.city + ' · ' + t.birthday + ' · 微信: ' + t.nickname + '</div>';
     html += '<div class="member-route">' + routeInfo + '</div>';
     html += '</div>';
   });
@@ -1365,9 +1365,42 @@ const DEMO_DATA = {
 // 页面加载后自动渲染示例数据
 window.addEventListener('DOMContentLoaded', () => {
   renderResult(DEMO_DATA);
+  // 渲染示例生辰局
+  renderDemoSquad();
   // 不自动滚动到结果区域，让用户先看到输入框
   window.scrollTo(0, 0);
 });
+
+function renderDemoSquad() {
+  const section = document.getElementById('squadSection');
+  const membersEl = document.getElementById('squadMembers');
+  const badgeEl = document.getElementById('squadBadge');
+  const subEl = document.getElementById('squadSub');
+
+  badgeEl.textContent = '上海 · 12-15 · 4人在线';
+  subEl.innerHTML = '找到 <strong>3</strong> 位和你同城同日生日的小伙伴，组队打卡效率更高！<br><span style="font-size:11px;color:var(--ink-faint)">以下是示例展示，填写信息后生成路线即可自动匹配真实队友</span>';
+
+  const demoMembers = [
+    { name: '我', color: '#FF6B35', bio: '上海 · 12-15', route: '8站路线已规划', isLeader: true, isOnline: true },
+    { name: '小', color: '#E63946', bio: '上海 · 12-15 · 微信: xiao_薅羊毛', route: '已领3站 · 正在海底捞', isOnline: true },
+    { name: '羊', color: '#2A9D8F', bio: '上海 · 12-15 · 微信: yangmaojun_88', route: '已领5站 · 前往喜茶中', isOnline: true },
+    { name: '达', color: '#C9962E', bio: '上海 · 12-15 · 微信: dada_同学', route: '刚出发 · 第1站星巴克', isOnline: false }
+  ];
+
+  let html = '';
+  demoMembers.forEach(function(m) {
+    const onlineDot = m.isOnline ? '<span style="color:#2A9D8F">●</span> ' : '<span style="color:#ccc">○</span> ';
+    html += '<div class="member-card' + (m.isLeader ? ' is-leader' : '') + '">';
+    html += '<div class="member-avatar" style="background:' + m.color + '">' + m.name + '</div>';
+    html += '<div class="member-name">' + (m.isLeader ? m.name + '（队长）' : onlineDot + m.name) + '</div>';
+    html += '<div class="member-bio">' + m.bio + '</div>';
+    html += '<div class="member-route">' + m.route + '</div>';
+    html += '</div>';
+  });
+
+  membersEl.innerHTML = html;
+  section.style.display = 'block';
+}
 </script>
 </body>
 </html>
