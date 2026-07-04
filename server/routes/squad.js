@@ -133,4 +133,222 @@ router.post('/update', (req, res) => {
   res.json({ success: true });
 });
 
+// ============================================================
+// 房间制生辰局（小程序专用，基于微信生态）
+// 
+// 数据结构：
+// rooms = Map<roomId, {
+//   roomId, roomCode, leaderId, leaderName, leaderAvatar,
+//   birthday, city, routeSummary, routeCount,
+//   members: [{ userId, nickname, avatar, joinedAt, routeCount, currentStop }],
+//   createdAt, expireAt
+// }>
+// ============================================================
+
+const rooms = new Map();
+const ROOM_TTL = 7 * 24 * 60 * 60 * 1000; // 房间7天过期
+
+function genRoomCode() {
+  return Math.random().toString(36).substr(2, 6).toUpperCase();
+}
+
+function genRoomId() {
+  return 'r_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4);
+}
+
+function getRoomPublicInfo(room) {
+  const now = Date.now();
+  return {
+    roomId: room.roomId,
+    roomCode: room.roomCode,
+    leaderName: room.leaderName,
+    leaderAvatar: room.leaderAvatar,
+    birthday: room.birthday,
+    city: room.city,
+    routeSummary: room.routeSummary,
+    routeCount: room.routeCount,
+    memberCount: room.members.length,
+    members: room.members.map(m => ({
+      userId: m.userId,
+      nickname: m.nickname,
+      avatar: m.avatar,
+      routeCount: m.routeCount,
+      currentStop: m.currentStop,
+      isLeader: m.userId === room.leaderId,
+      isOnline: (now - m.lastActiveAt) < 30 * 60 * 1000,
+      joinedAt: m.joinedAt
+    })),
+    createdAt: room.createdAt,
+    expireAt: room.expireAt
+  };
+}
+
+/**
+ * POST /api/squad/room/create
+ * 创建生日局房间（发起人调用）
+ * 
+ * Body: { userId, nickname, avatar, birthday, city, routeSummary?, routeCount? }
+ * Response: { roomId, roomCode, ...roomInfo }
+ */
+router.post('/room/create', (req, res) => {
+  const { userId, nickname, avatar, birthday, city, routeSummary, routeCount } = req.body;
+
+  if (!nickname || !birthday || !city) {
+    return res.status(400).json({ error: '缺少必要参数' });
+  }
+
+  const now = Date.now();
+  const roomId = genRoomId();
+  const uid = userId || ('wx_' + now + '_' + Math.random().toString(36).substr(2, 6));
+
+  const room = {
+    roomId,
+    roomCode: genRoomCode(),
+    leaderId: uid,
+    leaderName: nickname.trim().substring(0, 20),
+    leaderAvatar: avatar || '',
+    birthday,
+    city: city.replace(/市$/, ''),
+    routeSummary: routeSummary || '',
+    routeCount: routeCount || 0,
+    members: [{
+      userId: uid,
+      nickname: nickname.trim().substring(0, 20),
+      avatar: avatar || '',
+      routeCount: routeCount || 0,
+      currentStop: '',
+      joinedAt: now,
+      lastActiveAt: now
+    }],
+    createdAt: now,
+    expireAt: now + ROOM_TTL
+  };
+
+  rooms.set(roomId, room);
+  res.json({ roomId, userId: uid, ...getRoomPublicInfo(room) });
+});
+
+/**
+ * POST /api/squad/room/join
+ * 加入生日局房间（通过分享链接/小程序码加入）
+ * 
+ * Body: { roomId, userId, nickname, avatar }
+ * Response: { userId, ...roomInfo }
+ */
+router.post('/room/join', (req, res) => {
+  const { roomId, roomCode, userId, nickname, avatar } = req.body;
+
+  if (!nickname) {
+    return res.status(400).json({ error: '缺少必要参数' });
+  }
+
+  // 支持 roomId 或 roomCode 查找房间
+  let room = null;
+  if (roomId) {
+    room = rooms.get(roomId);
+  } else if (roomCode) {
+    for (const [id, r] of rooms) {
+      if (r.roomCode === roomCode.toUpperCase()) {
+        room = r;
+        break;
+      }
+    }
+  }
+
+  if (!room) return res.status(404).json({ error: '房间不存在或邀请码无效' });
+  if (Date.now() > room.expireAt) {
+    rooms.delete(room.roomId);
+    return res.status(404).json({ error: '房间已过期' });
+  }
+
+  const now = Date.now();
+  const uid = userId || ('wx_' + now + '_' + Math.random().toString(36).substr(2, 6));
+
+  // 检查是否已加入
+  let member = room.members.find(m => m.userId === uid);
+  if (!member) {
+    // 新成员加入
+    member = {
+      userId: uid,
+      nickname: nickname.trim().substring(0, 20),
+      avatar: avatar || '',
+      routeCount: 0,
+      currentStop: '',
+      joinedAt: now,
+      lastActiveAt: now
+    };
+    room.members.push(member);
+  } else {
+    member.lastActiveAt = now;
+    if (avatar) member.avatar = avatar;
+  }
+
+  res.json({ userId: uid, ...getRoomPublicInfo(room) });
+});
+
+/**
+ * GET /api/squad/room/info?roomId=xxx
+ * 查询房间信息（进入小程序时调用）
+ */
+router.get('/room/info', (req, res) => {
+  const { roomId } = req.query;
+  if (!roomId) return res.status(400).json({ error: '缺少 roomId' });
+
+  const room = rooms.get(roomId);
+  if (!room) return res.status(404).json({ error: '房间不存在或已过期' });
+  if (Date.now() > room.expireAt) {
+    rooms.delete(roomId);
+    return res.status(404).json({ error: '房间已过期' });
+  }
+
+  res.json(getRoomPublicInfo(room));
+});
+
+/**
+ * POST /api/squad/room/heartbeat
+ * 心跳：更新成员在线状态和进度
+ * 
+ * Body: { roomId, userId, routeCount?, currentStop? }
+ */
+router.post('/room/heartbeat', (req, res) => {
+  const { roomId, userId, routeCount, currentStop } = req.body;
+  if (!roomId || !userId) return res.status(400).json({ error: '缺少参数' });
+
+  const room = rooms.get(roomId);
+  if (!room) return res.status(404).json({ error: '房间不存在' });
+
+  const member = room.members.find(m => m.userId === userId);
+  if (!member) return res.status(404).json({ error: '不在房间中' });
+
+  member.lastActiveAt = Date.now();
+  if (routeCount != null) member.routeCount = routeCount;
+  if (currentStop != null) member.currentStop = currentStop;
+
+  res.json({ success: true, ...getRoomPublicInfo(room) });
+});
+
+/**
+ * GET /api/squad/room/list?userId=xxx
+ * 查询用户参与的所有房间
+ */
+router.get('/room/list', (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.json({ rooms: [] });
+
+  const now = Date.now();
+  const myRooms = [];
+  for (const [id, room] of rooms) {
+    if (now > room.expireAt) {
+      rooms.delete(id);
+      continue;
+    }
+    if (room.members.some(m => m.userId === userId)) {
+      myRooms.push(getRoomPublicInfo(room));
+    }
+  }
+
+  myRooms.sort((a, b) => b.createdAt - a.createdAt);
+  res.json({ rooms: myRooms });
+});
+
 module.exports = router;
