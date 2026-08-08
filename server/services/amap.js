@@ -169,6 +169,42 @@ async function measureDistance(origins, destination, type = '0') {
 }
 
 /**
+ * 步行路径规划：返回沿道路的折线、距离和预计耗时。
+ */
+async function walkingRoute(origin, destination) {
+  const url = `${BASE_V3}/direction/walking?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&key=${AMAP_KEY}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  const path = data.status === '1' && data.route && data.route.paths && data.route.paths[0];
+
+  if (!path) {
+    throw new Error(`步行路线规划失败: ${data.info || '未返回可用路径'}`);
+  }
+
+  const points = [];
+  (path.steps || []).forEach(step => {
+    (step.polyline || '').split(';').forEach(location => {
+      const [longitude, latitude] = location.split(',').map(Number);
+      if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return;
+      const previous = points[points.length - 1];
+      if (!previous || previous.longitude !== longitude || previous.latitude !== latitude) {
+        points.push({ longitude, latitude });
+      }
+    });
+  });
+
+  if (points.length < 2) {
+    throw new Error('步行路线规划失败: 道路折线为空');
+  }
+
+  return {
+    distance: Number(path.distance || 0),
+    duration: Number(path.duration || 0),
+    points
+  };
+}
+
+/**
  * 逆地理编码：坐标 → 地址文本（用于GPS定位后获取地名）
  */
 async function regeocode(location) {
@@ -244,5 +280,6 @@ module.exports = {
   aroundSearch,
   searchDetail,
   findNearestStore,
-  measureDistance
+  measureDistance,
+  walkingRoute
 };
