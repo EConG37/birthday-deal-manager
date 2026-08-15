@@ -7,6 +7,8 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Render 等托管平台位于反向代理之后，启用后限流才能识别真实客户端 IP。
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 
@@ -23,6 +25,8 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
 
 // API路由
 app.use('/api/plan', require('./routes/plan'));
+app.use('/api/route', require('./routes/routeShare'));
+app.use('/api/ratings', require('./routes/ratings'));
 app.use('/api/squad', require('./routes/squad'));
 app.use('/api/cps', require('./routes/cps'));
 
@@ -31,8 +35,8 @@ app.get('/api/regeocode', async (req, res) => {
   const { location } = req.query;
   if (!location) return res.status(400).json({ error: '缺少location参数' });
   try {
-    const amap = require('./services/amap');
-    const result = await amap.regeocode(location);
+    const tencent = require('./services/tencent');
+    const result = await tencent.regeocode(location);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -43,8 +47,9 @@ app.get('/api/regeocode', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    amap_key: process.env.AMAP_KEY ? '已配置' : '未配置',
+    tencent_lbs_key: process.env.TENCENT_LBS_KEY ? '已配置' : '未配置',
     deepseek_key: process.env.DEEPSEEK_KEY ? '已配置' : '未配置',
+    cps_key: process.env.JUTUIKE_APIKEY ? '已配置' : '未配置',
     timestamp: new Date().toISOString()
   });
 });
@@ -52,6 +57,6 @@ app.get('/api/health', (req, res) => {
 app.listen(PORT, () => {
   console.log(`\n🎂 生日薅羊毛管家服务已启动`);
   console.log(`   本地地址: http://localhost:${PORT}`);
-  console.log(`   高德Key:  ${process.env.AMAP_KEY ? '✅ 已配置' : '❌ 未配置（请编辑 .env）'}`);
+  console.log(`   腾讯LBS:  ${process.env.TENCENT_LBS_KEY ? '✅ 已配置' : '❌ 未配置（请编辑 .env）'}`);
   console.log(`   DeepSeek: ${process.env.DEEPSEEK_KEY ? '✅ 已配置' : '❌ 未配置（请编辑 .env）'}\n`);
 });

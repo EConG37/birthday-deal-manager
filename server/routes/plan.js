@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const amap = require('../services/amap');
+const tencent = require('../services/tencent');
 const dealsService = require('../services/deals');
+const routeShare = require('../services/routeShare');
 
 const MAX_ROUTE_STOPS = 5;
 const STORE_QUERY_INTERVAL_MS = 220;
@@ -35,17 +36,17 @@ router.post('/', async (req, res) => {
       console.log(`[步骤2] 使用GPS定位坐标: ${originLocation}`);
     } else {
       // 文本地址 → 坐标
-      const originGeo = await amap.geocode(origin, city);
+      const originGeo = await tencent.geocode(origin, city);
       originLocation = originGeo.location;
       console.log(`[步骤2] 地理编码坐标: ${originLocation}`);
     }
 
     // ===== 步骤3: 受控查询每个品牌的最近门店 =====
-    // 当前高德 Key 在并发请求时会限流；小间隔顺序查询实测约 6.5 秒且结果完整。
+    // 腾讯 Key 同样存在并发/QPS 限制；小间隔顺序查询实测结果完整且不触发限流。
     const storeResults = [];
     for (const deal of offlineDeals) {
       try {
-        const store = await amap.findNearestStore(
+        const store = await tencent.findNearestStore(
           deal.store_query_hint,
           originLocation,
           5000
@@ -99,22 +100,24 @@ router.post('/', async (req, res) => {
         store_address: store.store.address,
         store_location: store.store.location,
         store_poiId: store.store.poiId,
+        store_tel: store.store.tel || '',
         store_rating: store.store.rating || '',
         store_opentime: store.store.opentime || '',
         distance: store.distance
       };
     });
 
-    // ===== 步骤5: 逐段获取高德真实步行道路折线 =====
+    // ===== 步骤5: 逐段获取腾讯真实步行道路折线 =====
     const walking = await buildWalkingGeometry(originLocation, route);
 
     const totalEstimatedValue = route.reduce((sum, stop) => sum + Number(stop.estimated_value || 0), 0);
     const summary = `已从附近${storeResults.length}个品牌中挑选${route.length}站，步行约${formatDistance(walking.totalDistance)}，预估价值约${totalEstimatedValue}元`;
 
-    // 生成高德地图导航链接（URI Scheme，无需MCP）
+    // 生成腾讯地图导航链接（URI API，坐标顺序为 名称,纬度,经度）。
+    // 小程序端实际使用 wx.openLocation，此字段仅供 H5 端兜底。
     const navLinks = route.map(r => {
       const [lon, lat] = r.store_location.split(',');
-      return `https://uri.amap.com/navigation?to=${lon},${lat},${encodeURIComponent(r.store_name)}&mode=walk&coordinate=gaode`;
+      return `https://apis.map.qq.com/uri/v1/route?to=${encodeURIComponent(r.store_name)},${lat},${lon}&policy=1&referer=${encodeURIComponent('生日薅羊毛管家')}`;
     });
 
     const result = {
@@ -135,12 +138,31 @@ router.post('/', async (req, res) => {
       total_distance: walking.totalDistance,
       total_duration: walking.totalDuration,
       route_polyline: walking.points,
-      route_geometry_source: walking.complete ? 'amap_walking' : 'mixed_fallback',
+      route_geometry_source: walking.complete ? 'tencent_walking' : 'mixed_fallback',
       summary: summary,
       candidate_count: storeResults.length,
       planning_mode: 'distance_optimized_v2',
       generated_at: new Date().toISOString()
     };
+
+    // 生成分享快照：好友通过 /pages/route/route?share=<id> 打开同一条路线。
+    // 快照剔除 birthday 等隐私字段。
+    const share = routeShare.create({
+      city: result.city,
+      origin: result.origin,
+      origin_location: result.origin_location,
+      route: result.route,
+      online_deals: result.online_deals,
+      total_estimated_value: result.total_estimated_value,
+      total_distance: result.total_distance,
+      total_duration: result.total_duration,
+      route_polyline: result.route_polyline,
+      route_geometry_source: result.route_geometry_source,
+      summary: result.summary,
+      generated_at: result.generated_at
+    });
+    result.share_id = share.id;
+    result.share_expires_at = share.expiresAt;
 
     console.log(`[规划完成] 共${route.length}站, 预估价值¥${result.total_estimated_value}`);
     res.json(result);
@@ -293,7 +315,7 @@ async function buildWalkingGeometry(originLocation, route) {
     const directDistance = Math.round(distanceBetweenLocations(currentLocation, stop.store_location));
 
     try {
-      const segment = await amap.walkingRoute(currentLocation, stop.store_location);
+      const segment = await tencent.walkingRoute(currentLocation, stop.store_location);
       stop.leg_distance = segment.distance || directDistance;
       stop.leg_duration = segment.duration || Math.ceil(stop.leg_distance / 1.2);
       appendUniquePoints(points, segment.points);
