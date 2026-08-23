@@ -27,6 +27,8 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
 app.use('/api/plan', require('./routes/plan'));
 app.use('/api/route', require('./routes/routeShare'));
 app.use('/api/ratings', require('./routes/ratings'));
+app.use('/api/deals', require('./routes/deals'));
+app.use('/api/wishes', require('./routes/wishes'));
 app.use('/api/squad', require('./routes/squad'));
 app.use('/api/cps', require('./routes/cps'));
 

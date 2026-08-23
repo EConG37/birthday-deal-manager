@@ -3,9 +3,16 @@ const router = express.Router();
 const tencent = require('../services/tencent');
 const dealsService = require('../services/deals');
 const routeShare = require('../services/routeShare');
+const storeDb = require('../services/storeDb');
 
 const MAX_ROUTE_STOPS = 5;
 const STORE_QUERY_INTERVAL_MS = 220;
+
+// 前端省市区选择器返回"上海市"，种子数据里是"上海"，统一去掉行政后缀
+function normalizeCity(city) {
+  return String(city || '')
+    .replace(/(壮族自治区|回族自治区|维吾尔自治区|自治区|省|市)$/, '');
+}
 
 /**
  * POST /api/plan
@@ -24,7 +31,8 @@ router.post('/', async (req, res) => {
     console.log(`[规划开始] 生日:${birthday} 城市:${city} 出发地:${origin}`);
 
     // ===== 步骤1: 过滤优惠数据 =====
-    const offlineDeals = dealsService.filterDeals(birthday, city);
+    const normalizedCity = normalizeCity(city);
+    const offlineDeals = dealsService.filterDeals(birthday, normalizedCity);
     const onlineDeals = dealsService.getOnlineDeals();
     console.log(`[步骤1] 筛选出 ${offlineDeals.length} 个线下品牌, ${onlineDeals.length} 个线上平台`);
 
@@ -41,16 +49,22 @@ router.post('/', async (req, res) => {
       console.log(`[步骤2] 地理编码坐标: ${originLocation}`);
     }
 
-    // ===== 步骤3: 受控查询每个品牌的最近门店 =====
-    // 腾讯 Key 同样存在并发/QPS 限制；小间隔顺序查询实测结果完整且不触发限流。
+    // ===== 步骤3: 优先查自有门店库，库中没有/过期再实时搜索 =====
+    // 门店库由 scripts/sync-stores.js 每周同步，把地点搜索的配额消耗降到接近零。
     const storeResults = [];
     for (const deal of offlineDeals) {
+      let fromLocalDb = true;
       try {
-        const store = await tencent.findNearestStore(
-          deal.store_query_hint,
-          originLocation,
-          5000
-        );
+        // 本地库命中时零配额、零等待；未命中才实时搜索并节流
+        let store = storeDb.findNearestStore(deal.store_query_hint, originLocation, 5000);
+        if (!store) {
+          fromLocalDb = false;
+          store = await tencent.findNearestStore(
+            deal.store_query_hint,
+            originLocation,
+            5000
+          );
+        }
         if (store && store.location) {
           // 算距离
           const [oLon, oLat] = originLocation.split(',').map(Number);
@@ -63,7 +77,7 @@ router.post('/', async (req, res) => {
             store: store,
             distance: Math.round(distance)
           };
-          console.log(`  ✓ ${deal.brand} → ${store.name} (${Math.round(distance)}m)`);
+          console.log(`  ✓ ${deal.brand} → ${store.name} (${Math.round(distance)}m${fromLocalDb ? ' · 本地库' : ' · 实时'})`);
           storeResults.push(result);
         } else {
           console.log(`  ✗ ${deal.brand} → 未找到附近门店`);
@@ -71,7 +85,7 @@ router.post('/', async (req, res) => {
       } catch (err) {
         console.log(`  ✗ ${deal.brand} → 查询失败: ${err.message}`);
       }
-      await wait(STORE_QUERY_INTERVAL_MS);
+      await wait(fromLocalDb ? 0 : STORE_QUERY_INTERVAL_MS);
     }
     console.log(`[步骤3] 成功查询 ${storeResults.length} 个品牌门店`);
 

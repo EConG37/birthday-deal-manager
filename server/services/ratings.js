@@ -6,7 +6,7 @@ const path = require('path');
  * 内存为主、data/ratings.json 落盘兜底：本地/单实例重启不丢，
  * 多实例或重新部署后需要迁到正式数据库（云开发/Redis，见 doc 13）。
  */
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR = path.join(__dirname, '..', 'data');
 const DATA_FILE = path.join(DATA_DIR, 'ratings.json');
 const MAX_ENTRIES = 10000;
 const FLUSH_DELAY_MS = 3000;
