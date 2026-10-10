@@ -8,6 +8,33 @@ const storeDb = require('../services/storeDb');
 const MAX_ROUTE_STOPS = 5;
 const STORE_QUERY_INTERVAL_MS = 220;
 
+// 轻量限流：单 IP 每分钟最多 6 次规划。/api/plan 每次调用都消耗
+// 腾讯地图配额和 LLM token，且请求地址明文在客户端包内可被提取，
+// 不加限流等于配额裸奔（照 ratings 的滑动窗口模式实现）。
+const PLAN_LIMIT_PER_MIN = 6;
+const planTimesByIp = new Map();
+
+function allowPlan(ip) {
+  const now = Date.now();
+  const times = (planTimesByIp.get(ip) || []).filter(t => now - t < 60 * 1000);
+  if (times.length >= PLAN_LIMIT_PER_MIN) {
+    planTimesByIp.set(ip, times);
+    return false;
+  }
+  times.push(now);
+  planTimesByIp.set(ip, times);
+  return true;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  planTimesByIp.forEach((times, ip) => {
+    const alive = times.filter(t => now - t < 60 * 1000);
+    if (alive.length === 0) planTimesByIp.delete(ip);
+    else planTimesByIp.set(ip, alive);
+  });
+}, 60 * 1000).unref();
+
 // 前端省市区选择器返回"上海市"，种子数据里是"上海"，统一去掉行政后缀
 function normalizeCity(city) {
   return String(city || '')
@@ -25,6 +52,10 @@ router.post('/', async (req, res) => {
 
   if (!birthday || !city || !origin) {
     return res.status(400).json({ error: '缺少参数: birthday, city, origin 必填' });
+  }
+
+  if (!allowPlan(req.ip)) {
+    return res.status(429).json({ error: '路线生成太频繁了，稍等一分钟再试' });
   }
 
   try {

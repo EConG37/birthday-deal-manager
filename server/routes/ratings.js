@@ -33,7 +33,7 @@ setInterval(() => {
  * 出参: { success, count, average }
  */
 router.post('/', (req, res) => {
-  const { brand, poi_id, score, comment } = req.body || {};
+  const { brand, poi_id, score, comment, uid } = req.body || {};
   const normalizedScore = Number(score);
 
   if (!brand || typeof brand !== 'string') {
@@ -51,9 +51,10 @@ router.post('/', (req, res) => {
       brand,
       poiId: poi_id,
       score: normalizedScore,
-      comment
+      comment,
+      uid
     });
-    res.json({ success: true, count: summary.count, average: summary.average });
+    res.json({ success: true, duplicate: !!summary.duplicate, count: summary.count, average: summary.average });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

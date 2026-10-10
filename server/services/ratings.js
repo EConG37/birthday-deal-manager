@@ -51,13 +51,27 @@ function summaryOf(brand) {
 
 /**
  * 新增一条评价
- * @returns 该品牌的聚合 {count, average}
+ * 同一 uid 对同一品牌每天只记一次（uid 为空时跳过该检查，退化为仅 IP 限流）。
+ * @returns {duplicate: boolean, count, average}
  */
-function addRating({ brand, poiId, score, comment }) {
+function addRating({ brand, poiId, score, comment, uid }) {
   load();
+  const normalizedUid = String(uid || '').slice(0, 64);
+  const dayStart = new Date().setHours(0, 0, 0, 0);
+
+  if (normalizedUid) {
+    const duplicated = ratings.some(entry =>
+      entry.brand === brand && entry.uid === normalizedUid && entry.ts >= dayStart
+    );
+    if (duplicated) {
+      return Object.assign({ duplicate: true }, summaryOf(brand));
+    }
+  }
+
   ratings.push({
     brand: brand,
     poi_id: poiId || '',
+    uid: normalizedUid,
     score: Number(score),
     comment: String(comment || '').slice(0, 200),
     ts: Date.now()
@@ -66,7 +80,7 @@ function addRating({ brand, poiId, score, comment }) {
     ratings = ratings.slice(ratings.length - MAX_ENTRIES);
   }
   flushSoon();
-  return summaryOf(brand);
+  return Object.assign({ duplicate: false }, summaryOf(brand));
 }
 
 /**
