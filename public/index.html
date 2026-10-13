@@ -355,7 +355,7 @@ body.is-bday .cat-section[data-cat="birthday"] .card{border-color:rgba(230,57,43
 }
 .tb-in{
   max-width:500px;margin:0 auto;
-  display:grid;grid-template-columns:repeat(5,1fr);
+  display:grid;grid-template-columns:repeat(4,1fr);
   padding:2px 0 calc(4px + env(safe-area-inset-bottom));
 }
 @media(min-width:1000px){.tb-in{max-width:540px}}
@@ -416,7 +416,7 @@ body.has-flash-urgent .tb-item[data-view="flash"] .tb-dot{display:block}
       <span class="logo">省</span>
       <span>
         <div class="hd-name">生日薅羊毛管家</div>
-        <div class="hd-sub">生日特权 · 限时捡漏 · 每日更新</div>
+        <div class="hd-sub">生日特权 · 会员特惠 · 每日更新</div>
       </span>
       <span class="hd-date" id="datePill"></span>
     </div>
@@ -470,14 +470,14 @@ body.has-flash-urgent .tb-item[data-view="flash"] .tb-dot{display:block}
     <div class="sections" id="sectionsBirthday"></div>
 
     <div class="entry-grid reveal" style="--d:.05s">
-      <a class="entry flash" href="#/flash">
-        <div class="e-title">⚡ 限时捡漏</div>
-        <div class="e-sub">稀缺低价货源 · 随时下架</div>
-        <span class="e-go">→</span>
-      </a>
       <a class="entry vip" href="#/daily">
         <div class="e-title">🧧 日常优惠</div>
         <div class="e-sub">外卖红包 · 电影票 · 话费</div>
+        <span class="e-go">→</span>
+      </a>
+      <a class="entry bd" href="#/vip">
+        <div class="e-title">👑 会员特惠</div>
+        <div class="e-sub">视频/音乐/办公 低至2.5折起</div>
         <span class="e-go">→</span>
       </a>
     </div>
@@ -508,9 +508,9 @@ body.has-flash-urgent .tb-item[data-view="flash"] .tb-dot{display:block}
         <div class="e-sub">视频/音乐/办公 低至2.5折起</div>
         <span class="e-go">→</span>
       </a>
-      <a class="entry flash" href="#/flash">
-        <div class="e-title">⚡ 限时捡漏</div>
-        <div class="e-sub">稀缺低价货源 · 随时下架</div>
+      <a class="entry bd" href="#/birthday">
+        <div class="e-title">🎂 生日特权</div>
+        <div class="e-sub">设置生日 · 当天解锁专属福利</div>
         <span class="e-go">→</span>
       </a>
     </div>
@@ -589,11 +589,9 @@ body.has-flash-urgent .tb-item[data-view="flash"] .tb-dot{display:block}
       <span>生日</span>
       <i class="tb-dot"></i>
     </a>
-    <a class="tb-item" href="#/flash" data-view="flash">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4.8 13.5h5.7L9.6 22l8.6-11.5h-5.7z"/></svg>
-      <span>捡漏</span>
-      <i class="tb-dot"></i>
-    </a>
+    <!-- 捡漏 Tab 已随渠道停用撤下；恢复方法：把下方注释的 a 标签放回，并把 .tb-in 的列数改回 5
+    <a class="tb-item" href="#/flash" data-view="flash">…</a>
+    -->
     <a class="tb-item" href="#/daily" data-view="daily">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h16V12a2.2 2.2 0 0 0 0 4.4v3.6H4v-3.6a2.2 2.2 0 0 0 0-4.4z"/><path d="M14.5 8.5v11.5" stroke-dasharray="2.5 3"/></svg>
       <span>优惠</span>

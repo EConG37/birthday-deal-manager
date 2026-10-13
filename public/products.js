@@ -37,15 +37,17 @@ var JTK_STORE = 'https://kurl04.cn/tDxg0Q';
 window.PRODUCTS = [
 
   /* ========== 限时捡漏（明显低于市价的短寿命货源，expire 到期自动下架） ========== */
+  /* 2026-10-10：捡漏渠道（灰产会员）易被封+售后多，用户决定不做了。
+     本栏目代码保留——以后若上【官方限时活动】类商品，照样填 cat:'flash' + expire 即可自动恢复。 */
   {
     id: 'duo-super', cat: 'flash',
     brand: '多邻国', mono: '多', color: '#58CC02', logo: '',
     title: 'Super 会员 · 年卡', desc: '家庭席位 · 到期可续',
     price: 88, was: 588, unit: '/年',
-    expire: '2026-10-25',           // TODO: 改成这批货源的实际失效日期
+    expire: '2026-10-25',
     tags: ['自动发货', '低价'],
-    cta: '去开通', url: '',   // TODO: 链动小铺商品链接
-    hot: true,
+    cta: '去开通', url: '',
+    off: true,   // 渠道已停
   },
 
 
